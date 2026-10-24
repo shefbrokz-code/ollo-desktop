@@ -2,9 +2,11 @@
 // Онлайн приложение и так грузит интерфейс с ollo.su; копия нужна только без сети.
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const SITE = 'https://ollo.su';
-const UI = new URL('../src/ui/', import.meta.url).pathname;
+// fileURLToPath, а не .pathname: на Windows .pathname даёт «/D:/…» и запись падает
+const UI = fileURLToPath(new URL('../src/ui/', import.meta.url));
 const assets = ['assets/app.js', 'assets/style.css', 'assets/settings.js', 'assets/code.js', 'assets/favicon.svg'];
 
 async function get(path) {
