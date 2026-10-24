@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const SITE = 'https://ollo.su';
 // fileURLToPath, а не .pathname: на Windows .pathname даёт «/D:/…» и запись падает
 const UI = fileURLToPath(new URL('../src/ui/', import.meta.url));
-const assets = ['assets/app.js', 'assets/style.css', 'assets/settings.js', 'assets/code.js', 'assets/favicon.svg'];
+const assets = ['assets/app.js', 'assets/style.css', 'assets/settings.js', 'assets/code.js', 'assets/desktop.js', 'assets/favicon.svg'];
 
 async function get(path) {
   const r = await fetch(SITE + '/' + path, { headers: { 'X-Ollo-Client': 'Windows/build' } });

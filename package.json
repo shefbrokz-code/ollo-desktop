@@ -1,6 +1,6 @@
 {
   "name": "ollo-desktop",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "ollo — приложение для Windows",
   "author": "ollo",
   "main": "src/main.js",

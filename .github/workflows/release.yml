@@ -39,4 +39,6 @@ jobs:
           mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
           # latest.yml загружается последним: клиенты видят новую версию только когда установщик уже на месте
           scp -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new dist/*.exe dist/*.blockmap "$DEPLOY_USER@$DEPLOY_HOST:/var/www/ollo.su/app/"
-          scp -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new dist/latest.yml "$DEPLOY_USER@$DEPLOY_HOST:/var/www/ollo.su/app/"
+          # под временным именем и атомарный mv: нужен только доступ к папке, клиенты не увидят недописанный файл
+          scp -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new dist/latest.yml "$DEPLOY_USER@$DEPLOY_HOST:/var/www/ollo.su/app/latest.yml.new"
+          ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new "$DEPLOY_USER@$DEPLOY_HOST" 'mv -f /var/www/ollo.su/app/latest.yml.new /var/www/ollo.su/app/latest.yml' 

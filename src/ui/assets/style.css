@@ -1215,3 +1215,7 @@ html body.app.code-open .code-toggle{background:var(--accent-soft);color:var(--a
 html body.app #codeBtn svg{color:var(--accent)}
 html body.app #codeModal select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);font:14px Inter,sans-serif}
 @media (max-width:1100px){html body.app.code-open .main{margin-right:0}html body.app .code-panel{width:min(400px,100vw);box-shadow:-8px 0 30px rgba(0,0,0,.2)}}
+
+/* Windows-приложение: плашка перед перезапуском на обновление */
+html body.app .update-bar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:10px;max-width:min(720px,calc(100vw - 32px));padding:10px 12px 10px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text);box-shadow:0 12px 40px rgba(0,0,0,.25);font:13.5px/1.4 Inter,sans-serif}
+html body.app .update-bar .ub-text{flex:1;min-width:0}

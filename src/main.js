@@ -1,6 +1,6 @@
 'use strict';
 const { app, BrowserWindow, protocol, net, ipcMain, Menu, dialog, shell, session, Notification, nativeTheme } = require('electron');
-const path=require('node:path');const fs=require('node:fs/promises');const {pathToFileURL}=require('node:url');
+const path=require('node:path');const fsSync=require('node:fs');const fs=require('node:fs/promises');const {pathToFileURL}=require('node:url');
 const {autoUpdater}=require('electron-updater');
 protocol.registerSchemesAsPrivileged([{scheme:'ollo',privileges:{standard:true,secure:true,supportFetchAPI:true,stream:true,corsEnabled:true}}]);
 const SITE='https://ollo.su';const CSP="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://ollo.su; font-src 'self' data:; connect-src 'self'; frame-src 'self' about: blob:; object-src 'none'; base-uri 'self'; form-action 'self'";const LOCAL='ollo://app';const ROOT=path.join(__dirname,'ui');
@@ -66,13 +66,28 @@ async function localProtocol(request){
 }
 function validSender(event){return !!win && event.sender===win.webContents && event.senderFrame===win.webContents.mainFrame && event.senderFrame.url.startsWith(LOCAL+'/');}
 function publishUpdate(status,extra={}){updateState={...updateState,status,...extra};if(win&&!win.isDestroyed())win.webContents.send('ollo:update',updateState);}
-async function checkUpdates(manual=false){if(checking)return updateState;if(!app.isPackaged){publishUpdate('development');return updateState;}checking=true;publishUpdate('checking');try{await autoUpdater.checkForUpdates();}catch{publishUpdate('error',{message:'Не удалось проверить обновления. Повторите позже.'});if(manual&&win)dialog.showMessageBox(win,{type:'warning',message:'Сервер обновлений недоступен',detail:'Работу с чатами можно продолжить.',buttons:['OK']});}finally{checking=false;}return updateState;}
-autoUpdater.disableDifferentialDownload=true;autoUpdater.autoDownload=true;autoUpdater.autoInstallOnAppQuit=true;autoUpdater.allowDowngrade=false;
+async function checkUpdates(manual=false){if(checking)return updateState;
+ // обновление уже скачано — повторная проверка сбросила бы статус и отсчёт перезапуска
+ if(['ready','restarting','installing'].includes(updateState.status))return updateState;
+if(!app.isPackaged){publishUpdate('development');return updateState;}checking=true;publishUpdate('checking');try{await autoUpdater.checkForUpdates();}catch{publishUpdate('error',{message:'Не удалось проверить обновления. Повторите позже.'});if(manual&&win)dialog.showMessageBox(win,{type:'warning',message:'Сервер обновлений недоступен',detail:'Работу с чатами можно продолжить.',buttons:['OK']});}finally{checking=false;}return updateState;}
+autoUpdater.disableDifferentialDownload=false; // качаем только изменённые блоки по .blockmap; при сбое updater сам скачает полный файлautoUpdater.autoDownload=true;autoUpdater.autoInstallOnAppQuit=true;autoUpdater.allowDowngrade=false;
 autoUpdater.on('update-available',info=>publishUpdate('available',{availableVersion:info.version}));
 autoUpdater.on('update-not-available',()=>publishUpdate('current'));
 autoUpdater.on('download-progress',p=>publishUpdate('downloading',{percent:Math.round(p.percent)}));
 autoUpdater.on('error',()=>publishUpdate('error',{message:'Не удалось загрузить обновление'}));
-autoUpdater.on('update-downloaded',info=>{publishUpdate('ready',{availableVersion:info.version});if(Notification.isSupported())new Notification({title:'Обновление ollo готово',body:'Установите новую версию в удобный момент.'}).show();});
+// Новая версия: тихая установка и перезапуск, но не во время ответа модели; пользователь может отложить.
+const RESTART_DELAY=15,POSTPONE_MS=3600000;let rendererBusy=false,restartTimer=null,postponedUntil=0;
+const sessionFile=()=>path.join(app.getPath('userData'),'session.json');
+function saveSession(){try{const url=win&&!win.isDestroyed()?win.webContents.getURL():'';if(url.startsWith(LOCAL+'/'))fsSync.writeFileSync(sessionFile(),JSON.stringify({url}));}catch{}}
+function takeSession(){try{const {url}=JSON.parse(fsSync.readFileSync(sessionFile(),'utf8'));fsSync.unlinkSync(sessionFile());return typeof url==='string'&&url.startsWith(LOCAL+'/')?url:null;}catch{return null;}}
+function stopCountdown(){if(restartTimer){clearInterval(restartTimer);restartTimer=null;}}
+function installNow(){stopCountdown();saveSession();publishUpdate('installing');setImmediate(()=>autoUpdater.quitAndInstall(true,true));}
+function scheduleRestart(){
+ if(!['ready','restarting'].includes(updateState.status)||restartTimer||rendererBusy||Date.now()<postponedUntil)return;
+ let left=RESTART_DELAY;publishUpdate('restarting',{seconds:left});
+ restartTimer=setInterval(()=>{if(--left<=0)installNow();else publishUpdate('restarting',{seconds:left});},1000);
+}
+autoUpdater.on('update-downloaded',info=>{publishUpdate('ready',{availableVersion:info.version});if(win&&!win.isFocused()&&Notification.isSupported())new Notification({title:'Обновление ollo '+info.version,body:'Приложение перезапустится автоматически и откроется на том же месте.'}).show();scheduleRestart();});
 function menu(){Menu.setApplicationMenu(Menu.buildFromTemplate([
  {label:'Файл',submenu:[{label:'Главный экран',accelerator:'CommandOrControl+Home',click:()=>win?.loadURL(LOCAL+'/index.html')},{label:'Новый чат',accelerator:'CommandOrControl+N',click:()=>win?.webContents.send('ollo:action','new-chat')},{label:'Проекты',accelerator:'CommandOrControl+Shift+P',click:()=>win?.webContents.send('ollo:action','projects')},{label:'Файлы',click:()=>win?.webContents.send('ollo:action','files')},{type:'separator'},{label:'Выход',role:'quit'}]},
  {label:'Правка',submenu:[{role:'undo',label:'Отменить'},{role:'redo',label:'Повторить'},{type:'separator'},{role:'cut',label:'Вырезать'},{role:'copy',label:'Копировать'},{role:'paste',label:'Вставить'},{role:'selectAll',label:'Выделить всё'}]},
@@ -88,7 +103,7 @@ async function createWindow(){
  win.webContents.on('will-frame-navigate',event=>{if(event.isMainFrame && !event.url.startsWith(LOCAL+'/'))event.preventDefault();});
  win.webContents.on('will-attach-webview',e=>e.preventDefault());
  win.on('close',()=>{const bounds=win.getNormalBounds();fs.writeFile(path.join(app.getPath('userData'),'window.json'),JSON.stringify({width:bounds.width,height:bounds.height,maximized:win.isMaximized()})).catch(()=>{});});
- win.on('closed',()=>win=null);await win.loadURL(LOCAL+'/index.html');
+ win.on('closed',()=>win=null);await win.loadURL(takeSession()||LOCAL+'/index.html');
 }
 app.whenReady().then(async()=>{
  if(smoke){try{await establish();const r=await session.defaultSession.fetch(SITE+'/api.php?a=bootstrap',{credentials:'include'});const b=await r.json();if(!b.user||!Array.isArray(b.chats))throw new Error('API bootstrap failed');const request=new Request(LOCAL+'/api.php?a=bootstrap');const proxied=await localProtocol(request);const data=await proxied.json();if(!data.user||data.user.id!==b.user.id)throw new Error('Session is not persistent across requests');const local=await localProtocol(new Request(LOCAL+'/index.html'));const html=await local.text();if(!html.includes('desktop.css')||!html.includes('id="projectsPage"'))throw new Error('Local interface missing');if(!html.includes('assets/settings.js'))throw new Error('Remote interface not loaded');const legacyHome=await localProtocol(new Request(LOCAL+'/index.php'));if(!(await legacyHome.text()).includes('id="projectsPage"'))throw new Error('Home alias failed');const js=await localProtocol(new Request(LOCAL+'/assets/app.js'));if(!(await js.text()).includes('Shared account synchronization'))throw new Error('Sync module missing');console.log(JSON.stringify({test:'native-service',ok:true,guest:!!data.user.guest,models:data.models.length,chats:data.chats.length,csrf:!!csrf,localInterface:true}));app.exit(0);}catch(e){console.error(e.message);app.exit(1);}return;}
@@ -100,9 +115,13 @@ app.whenReady().then(async()=>{
  });
  session.defaultSession.setPermissionCheckHandler((contents,permission,origin)=>ownPage(contents,origin+'/') && (permission==='notifications'||permission==='media'||permission==='clipboard-sanitized-write'));
  protocol.handle('ollo',localProtocol);
- ipcMain.handle('ollo:state',e=>{if(!validSender(e))throw new Error('Unauthorized');const error=lastAuthError;lastAuthError='';return {version:app.getVersion(),update:updateState,authError:error};});
+ let justUpdated='';try{const file=path.join(app.getPath('userData'),'last-version.txt');const last=fsSync.existsSync(file)?fsSync.readFileSync(file,'utf8').trim():'';if(last&&last!==app.getVersion())justUpdated=app.getVersion();fsSync.writeFileSync(file,app.getVersion());}catch{}
+ ipcMain.handle('ollo:state',e=>{if(!validSender(e))throw new Error('Unauthorized');const error=lastAuthError;lastAuthError='';const updated=justUpdated;justUpdated='';return {version:app.getVersion(),update:updateState,authError:error,justUpdated:updated};});
  ipcMain.handle('ollo:update-check',e=>{if(!validSender(e))throw new Error('Unauthorized');return checkUpdates(true);});
- ipcMain.handle('ollo:update-install',async e=>{if(!validSender(e)||updateState.status!=='ready')return false;const {response}=await dialog.showMessageBox(win,{type:'question',message:'Установить обновление ollo?',detail:'Приложение закроется и запустится снова. Сначала завершите текущий ответ.',buttons:['Установить и перезапустить','Позже'],defaultId:1,cancelId:1});if(response===0)setImmediate(()=>autoUpdater.quitAndInstall(false,true));return response===0;});
+ ipcMain.handle('ollo:update-install',e=>{if(!validSender(e)||!['ready','restarting'].includes(updateState.status))return false;installNow();return true;});
+ ipcMain.handle('ollo:update-postpone',e=>{if(!validSender(e))return false;stopCountdown();postponedUntil=Date.now()+POSTPONE_MS;publishUpdate('ready');setTimeout(scheduleRestart,POSTPONE_MS+1000).unref();return true;});
+ // во время ответа модели перезапуск ждёт; после ответа — отсчёт
+ ipcMain.on('ollo:busy',(e,busy)=>{if(!validSender(e))return;rendererBusy=!!busy;if(rendererBusy&&restartTimer){stopCountdown();publishUpdate('ready');}else if(!rendererBusy)scheduleRestart();});
  menu();await createWindow();setTimeout(()=>checkUpdates(false),5000);setInterval(()=>checkUpdates(false),2*3600000).unref();
  app.on('activate',()=>{if(!win)createWindow();});
 }).catch(e=>{dialog.showErrorBox('ollo',e.message);app.quit();});
