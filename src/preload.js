@@ -1,0 +1,3 @@
+'use strict';
+const {contextBridge,ipcRenderer}=require('electron');
+contextBridge.exposeInMainWorld('ollo',{desktop:true,getState:()=>ipcRenderer.invoke('ollo:state'),checkUpdates:()=>ipcRenderer.invoke('ollo:update-check'),installUpdate:()=>ipcRenderer.invoke('ollo:update-install'),onUpdate:callback=>{const listener=(_e,data)=>callback(data);ipcRenderer.on('ollo:update',listener);return ()=>ipcRenderer.removeListener('ollo:update',listener);},onAction:callback=>{const listener=(_e,action)=>callback(action);ipcRenderer.on('ollo:action',listener);return ()=>ipcRenderer.removeListener('ollo:action',listener);}});

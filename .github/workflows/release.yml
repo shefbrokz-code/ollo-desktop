@@ -1,0 +1,42 @@
+name: Release Windows app
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Sync offline UI copy from ollo.su
+        run: node scripts/sync-ui.mjs
+      - name: Smoke test (API session + remote UI)
+        run: npx electron . --service-smoke
+      - name: Build installer
+        run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ollo-windows
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
+      - name: Publish to ollo.su/app for auto-update
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          # latest.yml загружается последним: клиенты видят новую версию только когда установщик уже на месте
+          scp -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new dist/*.exe dist/*.blockmap "$DEPLOY_USER@$DEPLOY_HOST:/var/www/ollo.su/app/"
+          scp -i ~/.ssh/deploy -o StrictHostKeyChecking=accept-new dist/latest.yml "$DEPLOY_USER@$DEPLOY_HOST:/var/www/ollo.su/app/"

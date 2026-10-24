@@ -1,0 +1,54 @@
+{
+  "name": "ollo-desktop",
+  "version": "2.1.0",
+  "description": "ollo — приложение для Windows",
+  "author": "ollo",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --service-smoke",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "su.ollo.desktop",
+    "productName": "ollo",
+    "executableName": "ollo",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "ollo-setup-${version}.exe",
+      "shortcutName": "ollo",
+      "guid": "05d27c4b-7159-4291-8843-01fc5da4a7dc"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://ollo.su/app/"
+      }
+    ]
+  }
+}
