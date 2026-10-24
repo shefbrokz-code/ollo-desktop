@@ -1192,7 +1192,7 @@
   if(window.ollo?.desktop && typeof window.ollo.getState==='function' && typeof window.ollo.onUpdate==='function'){
     const status=document.createElement('button');status.id='desktopSyncStatus';status.type='button';status.className='desktop-sync';status.textContent='Подключаюсь…';status.title='Синхронизировать с аккаунтом ollo';status.onclick=synchronizeAccount;$('.sb-bottom').prepend(status);
     const update=document.createElement('button');update.id='desktopUpdateBtn';update.className='btn sm desktop-update';update.type='button';update.textContent='Обновления';update.title='Обновления приложения';$('.topbar').append(update);
-    let ready=false;const updateStatus=d=>{ready=d.status==='ready';update.textContent=ready?'Установить '+d.availableVersion:d.status==='downloading'?'Обновление '+(d.percent||0)+'%':d.status==='checking'?'Проверяю…':'Обновления';update.classList.toggle('ready',ready);};
+    let ready=false;const updateStatus=d=>{ready=d.status==='ready'||d.status==='restarting';update.textContent=d.status==='installing'?'Устанавливаю…':d.status==='restarting'?'Перезапуск через '+d.seconds+' с':ready?'Установить '+d.availableVersion:d.status==='downloading'?'Обновление '+(d.percent||0)+'%':d.status==='checking'?'Проверяю…':'Обновления';update.classList.toggle('ready',ready);};
     update.onclick=()=>ready?window.ollo.installUpdate():window.ollo.checkUpdates();
     window.ollo.onUpdate(updateStatus);
     window.ollo.onAction(action=>{if(action==='new-chat')$('#newChat').click();if(action==='projects')$('#newProject').click();if(action==='files')openLibrary();if(action==='sync')synchronizeAccount();});
